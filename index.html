@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101422">
+  <title>Cube Solver · 2×2</title>
+  <meta name="description" content="Enter your 2×2 cube colours, check the corners and follow a step-by-step solution.">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="cube.js"></script>
+  <script defer src="cube-view.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Cube Solver</div>
+      <span class="size"><span></span> 2×2 cube</span>
+    </div>
+  </header>
+  <main>
+    <section class="intro">
+      <h1>Solve your <span>2×2 cube.</span></h1>
+      <p>Enter the colours on all six faces. Get step-by-step turns or see what to check if the layout is impossible.</p>
+    </section>
+    <div class="workspace">
+      <section class="panel editor" aria-labelledby="editor-title">
+        <div class="panel-title">
+          <h2 id="editor-title">Enter cube colours</h2>
+          <div class="progress" id="progress" aria-label="Sticker entry progress"></div>
+        </div>
+        <details class="holding" open>
+          <summary>How to hold the cube</summary>
+          <p>Pick any top and front face, then keep those labels throughout. Read each face straight on using the edge guide below the grid. You can tip the whole cube to look at a face. Keep its layers in place while you enter colours.</p>
+        </details>
+        <div class="editor-grid">
+          <div class="net" id="net" aria-label="Unfolded cube faces"></div>
+          <div class="entry-tools">
+            <h3>Sticker colour</h3>
+            <p class="helper">Choose a colour, then tap a square.</p>
+            <div class="palette" id="palette" role="group" aria-label="Sticker colours"></div>
+            <div class="face-guide" id="face-guide"></div>
+          </div>
+        </div>
+        <details class="scheme" id="scheme-details">
+          <summary>Cube colour scheme</summary>
+          <p>The default is white opposite yellow, green opposite blue, and red opposite orange, with white on top, green in front and red to the right when solved. For a different cube, enter its known solved colours below. These are the reference colours and can differ from the way you’re holding the cube.</p>
+          <div class="scheme-grid" id="scheme"></div>
+          <p class="scheme-error" id="scheme-error" role="status"></p>
+        </details>
+        <div class="editor-actions">
+          <button type="button" class="primary" id="solve">Check &amp; solve <span aria-hidden="true">↗</span></button>
+          <button type="button" class="secondary" id="example">Try an example</button>
+          <button type="button" class="text-button" id="clear">Clear</button>
+        </div>
+      </section>
+      <section class="panel preview" aria-labelledby="preview-title">
+        <div class="panel-title">
+          <h2 id="preview-title">Cube preview</h2>
+          <span class="preview-label" id="preview-label">Live entry</span>
+        </div>
+        <div class="stage">
+          <canvas id="cube-view" width="720" height="490" role="img" aria-label="Preview of the top, front and right faces"></canvas>
+          <div class="view-faces" aria-label="Faces shown"><span><b>U</b> Top</span><span><b>F</b> Front</span><span><b>R</b> Right</span></div>
+        </div>
+        <button type="button" class="secondary replay-turn" id="replay-turn" aria-controls="cube-view" hidden>↻ Replay turn</button>
+        <div class="results" id="results" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+  <footer><span>Cube Solver</span><span>Enter on your phone. Follow along on your cube.</span></footer>
+</body>
+</html>
