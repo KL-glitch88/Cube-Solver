@@ -4,8 +4,8 @@
   const faces = ['U', 'R', 'F', 'D', 'L', 'B'];
   const names = { U: 'Top', R: 'Right', F: 'Front', D: 'Bottom', L: 'Left', B: 'Back' };
   const colours = {
-    W: ['White', '#f8fafc'], Y: ['Yellow', '#ffce4b'], R: ['Red', '#f34f59'],
-    O: ['Orange', '#ff9052'], G: ['Green', '#42cd91'], B: ['Blue', '#538bff'],
+    W: ['White', '#ffffff'], Y: ['Yellow', '#ffee00'], R: ['Red', '#ff2442'],
+    O: ['Orange', '#ff7300'], G: ['Green', '#00e65b'], B: ['Blue', '#2984ff'],
   };
   const standard = ['W', 'R', 'G', 'Y', 'O', 'B'];
   const vectors = {
@@ -175,7 +175,7 @@
       });
       add(next, 'layout', changedSlots);
     }
-    const priority = { entry: 0, twist: 1, stickers: 2 };
+    const priority = { entry: 0, twist: 1, stickers: 2, layout: 3 };
     return candidates.sort((a, b) => priority[a.type] - priority[b.type] || a.changes.length - b.changes.length);
   }
 
