@@ -210,7 +210,7 @@
   function showResults() {
     if (matchMedia('(max-width: 700px)').matches) {
       const destination = solution?.moves[step] ? canvas.closest('.preview') : results;
-      destination.scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+      destination.scrollIntoView({ block: 'start', behavior: 'instant' });
     }
   }
 
@@ -272,8 +272,8 @@
     next.id = 'next';
     next.disabled = done;
     nav.append(back, next);
-    results.append(list, node('div', done ? 'All ' + total + ' moves complete' : 'Move ' + (step + 1) + ' of ' + total, 'turn-label'),
-      node('p', done ? 'Check that each face on your cube is a solid colour.' : turnText(solution.moves[step])), nav);
+    results.append(node('div', done ? 'All ' + total + ' moves complete' : 'Move ' + (step + 1) + ' of ' + total, 'turn-label'),
+      node('p', done ? 'Check that each face on your cube is a solid colour.' : turnText(solution.moves[step])), nav, list);
   }
 
   function navigate(index, selector) {
