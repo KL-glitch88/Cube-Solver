@@ -7,7 +7,7 @@
   const positionInView = ([x, y, z]) => [351 + 98 * x - 81 * z, 218 - 95 * y + 40 * x + 43 * z];
   const cameraDepth = ([x, y, z]) => 7695 * x + 7454 * y + 9310 * z;
   const facingCamera = normal => cameraDepth(normal) > 0;
-  const cubiesBySize = new Map([2, 4].map(size => {
+  const cubiesBySize = new Map([2, 3, 4].map(size => {
     const coords = Array.from({ length: size }, (_, index) => (2 * index + 1) / size - 1);
     return [size, coords.flatMap(x => coords.flatMap(y => coords.map(z => [x, y, z])))];
   }));

@@ -21,6 +21,7 @@
   let busyStart = 0;
   let busyTimer = 0;
   let solveFailed = false;
+  const sizeLabel = () => size + '×' + size;
   const perFace = () => size * size;
   const positionLabel = index => size === 2 ? cornerPositions[index]
     : 'row ' + (Math.floor(index / size) + 1) + ', column ' + (index % size + 1);
@@ -165,7 +166,7 @@
       tile.classList.toggle('flag', flags.has(index));
       tile.setAttribute('aria-label', names[faces[Math.floor(index / perFace())]] + ' ' + positionLabel(index % perFace()) + ', ' + (colour ? colours[colour][0] : 'empty'));
     });
-    const duplicate = new Set(scheme).size !== 6;
+    const duplicate = size !== 3 && new Set(scheme).size !== 6;
     byId('solve').disabled = duplicate || busy;
     byId('scheme-error').textContent = duplicate ? 'Choose each reference colour once.' : '';
   }
@@ -289,33 +290,37 @@
         showResults();
         if (!reducedMotion.matches) playTurn();
       };
-      worker.postMessage({ id, stickers, scheme, example });
+      worker.postMessage({ id, size, stickers, scheme, example });
     } catch {
       fail();
     }
   }
 
   function renderLargeDiagnosis() {
-    results.replaceChildren(status('Impossible layout', true), node('h3', 'Check the 4×4 sticker layout'));
-    results.append(node('p', 'Compare the entries with your cube and check the selected colour scheme. The four centres of a colour can be on different faces in a scramble.'));
+    results.replaceChildren(status('Impossible layout', true), node('h3', 'Check the ' + sizeLabel() + ' sticker layout'));
+    results.append(node('p', size === 3
+      ? 'Compare the entries with your cube. The six centre stickers define the colours of its solved faces.'
+      : 'Compare the entries with your cube and check the selected colour scheme. The four centres of a colour can be on different faces in a scramble.'));
     const list = node('ul', '', 'result-faults');
     const descriptions = {
       'invalid-corner': 'These three colours cannot form a corner.',
       'mirrored-corner': 'These corner colours are in reverse order.',
       'duplicate-corner': 'This corner repeats a combination already entered.',
       'twisted-corner': 'The corners have a combined twist that normal turns cannot undo.',
+      'invalid-edge': 'These two colours cannot form an edge in this centre layout.',
+      'duplicate-edge': 'This edge colour pair appears more than once.',
       'invalid-wing': 'These two stickers cannot form an edge piece in this colour scheme.',
       'duplicate-wing': 'This edge piece repeats an orientation and colour pair already entered.',
       'flipped-edge': 'An edge piece cannot be flipped in isolation on this cube.',
       'parity': 'Two pieces appear swapped in a way normal turns cannot undo.',
-      'duplicate-centre-colour': 'Each reference colour should appear once in the colour scheme.',
+      'duplicate-centre-colour': 'Each of the six centre stickers should have a different colour.',
       'unknown-colour': 'One or more stickers do not match the six cube colours.',
     };
     const errorLabels = {
       'twisted-corner': 'Corner orientation',
       'flipped-edge': 'Edge orientation',
       'parity': 'Piece parity',
-      'duplicate-centre-colour': 'Colour scheme',
+      'duplicate-centre-colour': 'Centre colours',
       'unknown-colour': 'Sticker colour',
     };
     const cornerChipByLabel = {
@@ -335,14 +340,14 @@
       if (entryMatch) return names[entryMatch[1]] + ' (' + entryMatch[1] + ') · ' + entryMatch[2];
       return label;
     };
-    const location = index => names[faces[Math.floor(index / 16)]] + ' ' + positionLabel(index % 16);
+    const location = index => names[faces[Math.floor(index / perFace())]] + ' ' + positionLabel(index % perFace());
     for (const error of report.errors) {
-      const colour = error.face && colours[scheme[faces.indexOf(error.face)]]?.[0];
+      const colour = colours[error.colour ?? scheme[faces.indexOf(error.face)]]?.[0];
       const prefix = colour
         || (error.facelets?.length ? error.facelets.map(location).join(' / ') : '')
         || errorLabels[error.code]
         || 'Layout check';
-      const detail = error.code === 'colour-count' ? error.count + ' stickers entered, 16 expected.'
+      const detail = error.code === 'colour-count' ? error.count + ' stickers entered, ' + error.expected + ' expected.'
         : error.code === 'centre-count' ? error.count + ' centre stickers entered, 4 expected.'
         : descriptions[error.code] ?? 'Check the sticker colours.';
       listItem(list, prefix + ' ·', detail);
@@ -369,7 +374,7 @@
         options.append(option);
       });
     }
-    const isEntryRepair = !repair.label.startsWith('Reorient');
+    const isEntryRepair = repair.label.includes('rotate entry');
     const card = node('div', '', 'repair-card');
     card.append(node('h4', repair.label));
     card.append(node('p', isEntryRepair
@@ -392,7 +397,7 @@
 
   function runCheck(scroll = true) {
     resetResult();
-    if (size === 4) {
+    if (size > 2) {
       const missing = stickers.filter(colour => !colour).length;
       if (missing) {
         report = { missing };
@@ -421,7 +426,7 @@
       scheme = standard.slice();
       schemeInputs.forEach((input, index) => { input.value = scheme[index]; });
     }
-    if (size === 4) {
+    if (size > 2) {
       resetResult();
       checkLargeCube(twisted ? 'twisted' : 'scrambled');
       return;
@@ -558,18 +563,18 @@
     if (busy || solveFailed) {
       const elapsed = busy ? Math.floor((Date.now() - busyStart) / 1000) : 0;
       const heading = busy
-        ? (elapsed >= 2 ? 'Checking your 4×4… (' + elapsed + 's)' : 'Checking your 4×4…')
+        ? 'Checking your ' + sizeLabel() + '…' + (elapsed >= 2 ? ' (' + elapsed + 's)' : '')
         : 'Could not calculate a solution';
       const busyCopy = elapsed >= 8
-        ? 'Still searching — complex 4×4 scrambles and first-time table setup can take 10–20 seconds.'
+        ? 'Still searching. The first solve also prepares the search tables on this device.'
         : 'The first solve prepares the search tables on this device.';
       const failedCopy = location.protocol === 'file:'
-        ? 'The 4×4 solver runs in a web worker, which browsers block on file:// pages. Serve this folder over HTTP and reopen the page.'
+        ? 'This solver needs to run over HTTP. Serve this folder locally or open the published website.'
         : 'Your colours are still entered. Try Check & solve again.';
       results.replaceChildren(node('h3', heading), node('p', busy ? busyCopy : failedCopy));
       return;
     }
-    if (report && !report.missing) return size === 4 ? renderLargeDiagnosis() : renderDiagnosis();
+    if (report && !report.missing) return size > 2 ? renderLargeDiagnosis() : renderDiagnosis();
     const heading = report ? 'Add the remaining ' + report.missing + (report.missing === 1 ? ' sticker' : ' stickers') : 'Ready when you are';
     results.replaceChildren(node('h3', heading), node('p', 'Enter all ' + stickers.length + ' stickers to check the layout and get the turns.'));
     results.append(button('Try a twisted-corner example', 'text-button demo-link', () => example(true)));
@@ -620,9 +625,11 @@
     scheme = draft?.scheme ?? standard.slice();
     selected = draft?.selected ?? 'W';
     schemeInputs.forEach((input, index) => { input.value = scheme[index]; });
-    document.body.classList.toggle('cube-four', size === 4);
-    facePicker.hidden = size !== 4;
-    net.setAttribute('aria-label', size === 4 ? 'Sticker grid for selected face' : 'Unfolded cube faces');
+    document.body.classList.toggle('face-by-face', size > 2);
+    net.style.setProperty('--cube-size', size);
+    byId('scheme-details').hidden = size === 3;
+    facePicker.hidden = size === 2;
+    net.setAttribute('aria-label', size > 2 ? 'Sticker grid for selected face' : 'Unfolded cube faces');
     byId('cube-size-title').textContent = size + '×' + size + ' cube.';
     sizeButtons.forEach(tab => tab.setAttribute('aria-pressed', String(tab === button)));
     buildFaces();
