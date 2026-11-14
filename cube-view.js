@@ -7,10 +7,10 @@
   const positionInView = ([x, y, z]) => [351 + 98 * x - 81 * z, 218 - 95 * y + 40 * x + 43 * z];
   const cameraDepth = ([x, y, z]) => 7695 * x + 7454 * y + 9310 * z;
   const facingCamera = normal => cameraDepth(normal) > 0;
-  const cubies = [
-    [-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1],
-    [-1, -1, 1], [1, -1, 1], [-1, 1, 1], [1, 1, 1],
-  ];
+  const cubiesBySize = new Map([2, 4].map(size => {
+    const coords = Array.from({ length: size }, (_, index) => (2 * index + 1) / size - 1);
+    return [size, coords.flatMap(x => coords.flatMap(y => coords.map(z => [x, y, z])))];
+  }));
 
   function turnPoint([x, y, z], axis, angle) {
     if (axis < 0 || !angle) return [x, y, z];
@@ -56,7 +56,7 @@
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   }
 
-  function paint(ctx, state, { move, fraction = 0, intro = 1, completed = false, flags = [] } = {}) {
+  function paint(ctx, state, { move, size = 2, fraction = 0, intro = 1, completed = false, flags = [] } = {}) {
     const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
     if (ctx.canvas.width !== Math.round(W * dpr) || ctx.canvas.height !== Math.round(H * dpr)) {
       ctx.canvas.width = Math.round(W * dpr);
@@ -68,9 +68,16 @@
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    const turningFace = move?.[0];
+    const turn = typeof move === 'string'
+      ? { face: move[0], from: 1, to: 1, turns: move.endsWith('2') ? 2 : move.endsWith("'") ? 3 : 1 }
+      : move;
+    const turningFace = turn?.face;
+    const cubies = cubiesBySize.get(size);
     const axis = turningFace ? vectors[turningFace][0].findIndex(Boolean) : -1;
-    const quarterTurns = move?.endsWith('2') ? 2 : move?.endsWith("'") ? -1 : 1;
+    const sign = turningFace ? vectors[turningFace][0][axis] : 1;
+    const quarterTurns = (turn?.turns === 3 ? -1 : turn?.turns ?? 0) * sign;
+    const layer = pos => Math.round((1 - sign * pos[axis]) * size / 2 + .5);
+    const rotatingAt = pos => turn && layer(pos) >= turn.from && layer(pos) <= turn.to;
     const activeTurn = fraction > 0 && fraction < 1;
     const angle = fraction * quarterTurns * Math.PI / 2;
     const lift = activeTurn ? Math.sin(fraction * Math.PI) * 0.045 : 0;
@@ -93,7 +100,7 @@
     function transformPoint(point, rotating) {
       if (!rotating) return point;
       const lifted = point.slice();
-      if (axis >= 0 && lift) lifted[axis] += lift;
+      if (axis >= 0 && lift) lifted[axis] += lift * sign;
       return turnPoint(lifted, axis, angle);
     }
 
@@ -103,18 +110,20 @@
         const [normal, right, down] = vectors[face];
         const rotatedNormal = rotating ? turnPoint(normal, axis, angle) : normal;
         if (!facingCamera(rotatedNormal)) continue;
-        const isOuter = dot(pos, normal) > 0;
+        const isOuter = dot(pos, normal) >= 1 - 1 / size;
         visibleFaces.push({ fi, face, normal, right, down, rotatedNormal, isOuter });
       }
       // Draw inner seam faces before outer sticker faces on the same cubie
       visibleFaces.sort((a, b) => Number(a.isOuter) - Number(b.isOuter));
 
       for (const { fi, face, normal, right, down, rotatedNormal, isOuter } of visibleFaces) {
-        const plane = isOuter ? 1 : -gap;
-        const rSign = dot(pos, right);
-        const dSign = dot(pos, down);
-        const [r0, r1] = rSign > 0 ? [gap, 1] : [-1, -gap];
-        const [d0, d1] = dSign > 0 ? [gap, 1] : [-1, -gap];
+        const plane = isOuter ? 1 : dot(pos, normal) + 1 / size - gap;
+        const col = Math.round((dot(pos, right) + 1) * size / 2 - .5);
+        const row = Math.round((dot(pos, down) + 1) * size / 2 - .5);
+        const bounds = index => [-1 + 2 * index / size + (index ? gap : 0),
+          -1 + 2 * (index + 1) / size - (index < size - 1 ? gap : 0)];
+        const [r0, r1] = bounds(col);
+        const [d0, d1] = bounds(row);
 
         const uv = (u, v) => {
           const x = r0 + u * (r1 - r0);
@@ -142,7 +151,7 @@
           : '#33415f';
         drawRoundedQuad(ctx, bodyQuad, 0.11, bodyFill, bodyStroke, isTurnLayer ? 2 : 1.4);
 
-        const index = fi * 4 + (rSign > 0 ? 1 : 0) + (dSign > 0 ? 2 : 0);
+        const index = fi * size * size + row * size + col;
         const pad = 0.082;
         const stickerQuad = [uv(pad, pad), uv(1 - pad, pad), uv(1 - pad, 1 - pad), uv(pad, 1 - pad)];
         const colourCode = state[index];
@@ -182,20 +191,16 @@
       }
     }
 
-    const staticCubies = cubies
-      .filter(pos => axis < 0 || pos[axis] < 0)
-      .sort((a, b) => cameraDepth(a) - cameraDepth(b));
-    const rotatingCubies = axis >= 0
-      ? cubies
-        .filter(pos => pos[axis] > 0)
-        .sort((a, b) => cameraDepth(turnPoint(a, axis, angle)) - cameraDepth(turnPoint(b, axis, angle)))
-      : [];
-
-    for (const pos of staticCubies) drawCubie(pos, false);
-    for (const pos of rotatingCubies) drawCubie(pos, true);
+    const visible = cubies
+      .map(pos => {
+        const rotating = rotatingAt(pos);
+        return { pos, rotating, depth: cameraDepth(transformPoint(pos, rotating)) };
+      })
+      .sort((a, b) => a.depth - b.depth);
+    for (const { pos, rotating } of visible) drawCubie(pos, rotating);
 
     // Draw 3D perspective turn highlight & directional arc on the turning face
-    if (turningFace && axis >= 0) {
+    if (turningFace && turn.from === 1) {
       const [normal, right, down] = vectors[turningFace];
       const rotatedNormal = turnPoint(normal, axis, angle);
       if (facingCamera(rotatedNormal)) {
@@ -279,7 +284,7 @@
         ctx.textBaseline = 'middle';
         ctx.font = '800 16px Geist, "DM Sans", sans-serif';
         ctx.fillStyle = '#caff73';
-        ctx.fillText(move, cx, cy + 1);
+        ctx.fillText(typeof move === 'string' ? move : move.notation, cx, cy + 1);
         ctx.restore();
       }
     }
