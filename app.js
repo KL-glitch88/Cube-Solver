@@ -18,6 +18,8 @@
   let worker;
   let requestId = 0;
   let busy = false;
+  let busyStart = 0;
+  let busyTimer = 0;
   let solveFailed = false;
   const perFace = () => size * size;
   const positionLabel = index => size === 2 ? cornerPositions[index]
@@ -59,6 +61,8 @@
 
   function resetResult() {
     cancelAnimationFrame(animationFrame);
+    clearInterval(busyTimer);
+    busyTimer = 0;
     requestId++;
     busy = false;
     solveFailed = false;
@@ -245,10 +249,17 @@
   function checkLargeCube(example) {
     const id = ++requestId;
     busy = true;
+    busyStart = Date.now();
+    clearInterval(busyTimer);
+    busyTimer = setInterval(() => {
+      if (id === requestId && busy) drawResults();
+    }, 1000);
     draw();
     showResults();
     const fail = () => {
       if (id !== requestId) return;
+      clearInterval(busyTimer);
+      busyTimer = 0;
       busy = false;
       solveFailed = true;
       draw();
@@ -260,9 +271,12 @@
         worker = undefined;
         fail();
       };
+      worker.onmessageerror = worker.onerror;
       worker.onmessage = ({ data }) => {
         if (data.id !== requestId) return;
         if (data.failed) return fail();
+        clearInterval(busyTimer);
+        busyTimer = 0;
         busy = false;
         stickers = data.stickers;
         if (data.errors) {
@@ -542,11 +556,17 @@
   function drawResults() {
     if (solution) return renderSolution();
     if (busy || solveFailed) {
+      const elapsed = busy ? Math.floor((Date.now() - busyStart) / 1000) : 0;
+      const heading = busy
+        ? (elapsed >= 2 ? 'Checking your 4×4… (' + elapsed + 's)' : 'Checking your 4×4…')
+        : 'Could not calculate a solution';
+      const busyCopy = elapsed >= 8
+        ? 'Still searching — complex 4×4 scrambles and first-time table setup can take 10–20 seconds.'
+        : 'The first solve prepares the search tables on this device.';
       const failedCopy = location.protocol === 'file:'
         ? 'The 4×4 solver runs in a web worker, which browsers block on file:// pages. Serve this folder over HTTP and reopen the page.'
         : 'Your colours are still entered. Try Check & solve again.';
-      results.replaceChildren(node('h3', busy ? 'Checking your 4×4…' : 'Could not calculate a solution'),
-        node('p', busy ? 'The first solve prepares the search tables on this device.' : failedCopy));
+      results.replaceChildren(node('h3', heading), node('p', busy ? busyCopy : failedCopy));
       return;
     }
     if (report && !report.missing) return size === 4 ? renderLargeDiagnosis() : renderDiagnosis();
