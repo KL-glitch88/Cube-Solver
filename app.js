@@ -66,6 +66,7 @@
       const index = tiles.length;
       const tile = button('', 'tile', () => {
         stickers[index] = selected;
+        focusFace(face);
         resetResult();
         draw();
       });
@@ -152,7 +153,8 @@
     if (!ctx) return;
     const demo = !solution && !repair && stickers.every(c => !c);
     const visual = demo ? ['W', 'G', 'Y', 'W', 'B', 'R', 'O', 'Y', 'G', 'R', 'B', 'G'] : data;
-    paintCube(ctx, visual, { move: previewAfterTurn ? undefined : nextMove, flags: repair?.changes });
+    const flags = repair?.changes ?? report?.faults.flatMap(fault => Cube.corners[fault.slot]) ?? [];
+    paintCube(ctx, visual, { move: nextMove, completed: previewAfterTurn, flags });
     if (demo) canvas.setAttribute('aria-label', 'Illustration of a scrambled 2×2 cube');
   }
 
@@ -167,24 +169,35 @@
     }
     previewAfterTurn = false;
     drawPreview();
-    const start = performance.now() + 260;
-    const duration = move.endsWith('2') ? 900 : 650;
+    const introStart = performance.now();
+    const turnDelay = 280;
+    const start = introStart + turnDelay;
+    const duration = move.endsWith('2') ? 920 : 680;
     const data = solution.states[step];
     const label = byId('preview-label');
-    const playingLabel = 'Playing move ' + (step + 1);
+    const playingLabel = 'Playing move ' + (step + 1) + ' · ' + move;
+
+    function easeInOutCubic(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
 
     function frame(now) {
+      if (now < start) {
+        const intro = Math.min(1, (now - introStart) / (turnDelay * 0.85));
+        const easedIntro = 1 - Math.pow(1 - intro, 3);
+        paintCube(ctx, data, { move, fraction: 0, intro: easedIntro });
+        animationFrame = requestAnimationFrame(frame);
+        return;
+      }
       const fraction = Math.min(1, (now - start) / duration);
       if (fraction >= 1) {
         previewAfterTurn = true;
         drawPreview();
         return;
       }
-      if (fraction > 0) {
-        if (label.textContent !== playingLabel) label.textContent = playingLabel;
-        const eased = fraction * fraction * (3 - 2 * fraction);
-        paintCube(ctx, data, { move, fraction: eased });
-      }
+      if (label.textContent !== playingLabel) label.textContent = playingLabel;
+      const eased = easeInOutCubic(fraction);
+      paintCube(ctx, data, { move, fraction: eased, intro: 1 });
       animationFrame = requestAnimationFrame(frame);
     }
     animationFrame = requestAnimationFrame(frame);
@@ -197,7 +210,7 @@
   function showResults() {
     if (matchMedia('(max-width: 700px)').matches) {
       const destination = solution?.moves[step] ? canvas.closest('.preview') : results;
-      destination.scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+      destination.scrollIntoView({ block: 'start', behavior: 'instant' });
     }
   }
 
@@ -259,8 +272,8 @@
     next.id = 'next';
     next.disabled = done;
     nav.append(back, next);
-    results.append(list, node('div', done ? 'All ' + total + ' moves complete' : 'Move ' + (step + 1) + ' of ' + total, 'turn-label'),
-      node('p', done ? 'Check that each face on your cube is a solid colour.' : turnText(solution.moves[step])), nav);
+    results.append(node('div', done ? 'All ' + total + ' moves complete' : 'Move ' + (step + 1) + ' of ' + total, 'turn-label'),
+      node('p', done ? 'Check that each face on your cube is a solid colour.' : turnText(solution.moves[step])), nav, list);
   }
 
   function navigate(index, selector) {
@@ -355,6 +368,9 @@
   }
 
   replay.addEventListener('click', playTurn);
+  canvas.addEventListener('click', () => {
+    if (solution?.moves[step]) playTurn();
+  });
   reducedMotion.addEventListener('change', () => {
     cancelAnimationFrame(animationFrame);
     drawPreview();
