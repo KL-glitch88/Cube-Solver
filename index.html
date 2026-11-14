@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101422">
-  <title>Cube Solver · 2×2</title>
-  <meta name="description" content="Enter your 2×2 cube colours, check the corners and follow a step-by-step solution.">
+  <title>Cube Solver · 2×2 and 4×4</title>
+  <meta name="description" content="Enter your 2×2 or 4×4 cube colours, check the corners and follow a step-by-step solution.">
   <link rel="stylesheet" href="styles.css">
   <script defer src="cube.js"></script>
   <script defer src="cube-view.js"></script>
@@ -15,12 +15,15 @@
   <header class="bar">
     <div class="bar-inner">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Cube Solver</div>
-      <span class="size"><span></span> 2×2 cube</span>
+      <div class="cube-types" role="group" aria-label="Cube type">
+        <button type="button" class="secondary" data-size="2" aria-pressed="true">2×2</button>
+        <button type="button" class="secondary" data-size="4" aria-pressed="false">4×4</button>
+      </div>
     </div>
   </header>
   <main>
     <section class="intro">
-      <h1>Solve your <span>2×2 cube.</span></h1>
+      <h1>Solve your <span id="cube-size-title">2×2 cube.</span></h1>
       <p>Enter the colours on all six faces. Get step-by-step turns or see what to check if the layout is impossible.</p>
     </section>
     <div class="workspace">
@@ -34,6 +37,7 @@
           <p>Pick any top and front face, then keep those labels throughout. Read each face straight on using the edge guide below the grid. You can tip the whole cube to look at a face. Keep its layers in place while you enter colours.</p>
         </details>
         <div class="editor-grid">
+          <div id="face-picker" class="face-picker" role="group" aria-label="Face to enter" hidden></div>
           <div class="net" id="net" aria-label="Unfolded cube faces"></div>
           <div class="entry-tools">
             <h3>Sticker colour</h3>
