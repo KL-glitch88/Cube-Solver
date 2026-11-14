@@ -177,14 +177,18 @@
 
         // High-contrast double ring for flagged stickers (visible on yellow, orange, and white)
         if (flags.includes(index)) {
-          drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#090d16', 6.5);
-          drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#ff389c', 3.5);
+          const outerWidth = size === 4 ? 4.2 : 6.5;
+          const innerWidth = size === 4 ? 2.2 : 3.5;
+          const dotRadius = size === 4 ? 4 : 6;
+          const dotStroke = size === 4 ? 1.6 : 2.2;
+          drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#090d16', outerWidth);
+          drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#ff389c', innerWidth);
           const [cx, cy] = uv(0.5, 0.5);
           ctx.beginPath();
-          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.arc(cx, cy, dotRadius, 0, Math.PI * 2);
           ctx.fillStyle = '#090d16';
           ctx.fill();
-          ctx.lineWidth = 2.2;
+          ctx.lineWidth = dotStroke;
           ctx.strokeStyle = '#ffffff';
           ctx.stroke();
         }
@@ -199,11 +203,111 @@
       .sort((a, b) => a.depth - b.depth);
     for (const { pos, rotating } of visible) drawCubie(pos, rotating);
 
-    // Draw 3D perspective turn highlight & directional arc on the turning face
-    if (turningFace && turn.from === 1) {
+    function drawMoveBadge(cx, cy, text, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.font = '800 15px Geist, "DM Sans", sans-serif';
+      const minDiameter = 40 * (0.9 + 0.1 * intro);
+      const width = Math.max(minDiameter, ctx.measureText(text).width + 18);
+      const height = minDiameter;
+      const radius = height / 2;
+      ctx.beginPath();
+      ctx.roundRect(cx - width / 2, cy - height / 2, width, height, radius);
+      ctx.fillStyle = 'rgba(15, 22, 34, 0.94)';
+      ctx.fill();
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = '#caff73';
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#caff73';
+      ctx.fillText(text, cx, cy + 1);
+      ctx.restore();
+    }
+
+    // Draw 3D perspective turn highlight, directional arrows & move badge
+    if (turningFace) {
       const [normal, right, down] = vectors[turningFace];
       const rotatedNormal = turnPoint(normal, axis, angle);
-      if (facingCamera(rotatedNormal)) {
+      const hasVisibleOuterCap = turn.from === 1 && facingCamera(rotatedNormal);
+      const moveLabel = typeof move === 'string' ? move : move.notation;
+      const a0 = sign * (1 - 2 * (turn.from - 1) / size);
+      const a1 = sign * (1 - 2 * turn.to / size);
+      const aMid = (a0 + a1) / 2;
+      const dir = quarterTurns < 0 ? -1 : 1;
+
+      const slicePoint = (sideNormal, tangent, alongAxis, alongTangent, extraLift = 0.014) => {
+        const p3d = [0, 0, 0];
+        for (let c = 0; c < 3; c++) {
+          p3d[c] = sideNormal[c] * (1 + extraLift) + tangent[c] * alongTangent;
+        }
+        p3d[axis] = alongAxis;
+        return positionInView(transformPoint(p3d, true));
+      };
+
+      // Highlight the turning layer band on visible side faces (for wide, inner-slice, and back-facing turns)
+      const showSliceSides = !hasVisibleOuterCap || turn.to > turn.from;
+      if (showSliceSides) {
+        const sideFaces = faces.filter(face => {
+          const n = vectors[face][0];
+          return n[axis] === 0;
+        });
+        for (const sideFace of sideFaces) {
+          const sideNormal = vectors[sideFace][0];
+          const rotatedSide = turnPoint(sideNormal, axis, angle);
+          const sideDepth = cameraDepth(rotatedSide);
+          if (sideDepth <= 0) continue;
+          const fade = Math.min(1, sideDepth / 1800);
+          const tangent = turnPoint(sideNormal, axis, dir * Math.PI / 2);
+          const band = [
+            slicePoint(sideNormal, tangent, a0, -1),
+            slicePoint(sideNormal, tangent, a0, 1),
+            slicePoint(sideNormal, tangent, a1, 1),
+            slicePoint(sideNormal, tangent, a1, -1),
+          ];
+          const baseAlpha = (completed ? 0.55 : 0.88) * fade;
+          drawRoundedQuad(ctx, band, 0.04, null, `rgba(202, 255, 115, ${baseAlpha})`, completed ? 2.4 : 3.2);
+
+          if (!hasVisibleOuterCap) {
+            const span = 0.48 * Math.max(0.3, intro);
+            const tStart = -span;
+            const tEnd = span;
+            const tip = slicePoint(sideNormal, tangent, aMid, tEnd, 0.032);
+            const tail = slicePoint(sideNormal, tangent, aMid, tStart, 0.032);
+            const wingHalf = Math.min(0.15, Math.abs(a0 - a1) * 0.32);
+            const wingBack = tEnd - 0.2;
+            const wingA = slicePoint(sideNormal, tangent, aMid + wingHalf, wingBack, 0.032);
+            const wingB = slicePoint(sideNormal, tangent, aMid - wingHalf, wingBack, 0.032);
+
+            ctx.save();
+            ctx.globalAlpha = (completed ? 0.82 : 0.96) * fade;
+            for (const [stroke, width] of [['rgba(11, 16, 29, 0.9)', 9], ['#caff73', 4.2]]) {
+              ctx.strokeStyle = stroke;
+              ctx.lineWidth = width;
+              ctx.beginPath();
+              ctx.moveTo(tail[0], tail[1]);
+              ctx.lineTo(tip[0], tip[1]);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.moveTo(wingA[0], wingA[1]);
+              ctx.lineTo(tip[0], tip[1]);
+              ctx.lineTo(wingB[0], wingB[1]);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+
+        if (!hasVisibleOuterCap) {
+          const badge3d = [1.12, 1.12, 1.12];
+          badge3d[axis] = aMid + lift * sign;
+          const [bx, by] = positionInView(badge3d);
+          drawMoveBadge(bx, by, moveLabel, completed ? 0.9 : 1);
+        }
+      }
+
+      if (hasVisibleOuterCap) {
         const facePoint = (x, y, extraLift = 0.012) => {
           const p3d = [
             normal[0] * (1 + extraLift) + right[0] * x + down[0] * y,
@@ -213,13 +317,12 @@
           return positionInView(transformPoint(p3d, true));
         };
 
-        // Outer glowing frame around the turning 2x2 face
+        // Outer glowing frame around the turning face
         const borderQuad = [facePoint(-1, -1), facePoint(1, -1), facePoint(1, 1), facePoint(-1, 1)];
         const borderAlpha = completed ? 0.65 : 0.94;
         drawRoundedQuad(ctx, borderQuad, 0.06, null, `rgba(202, 255, 115, ${borderAlpha})`, completed ? 3 : 4.2);
 
         // 3D curved arrow lying in the plane of the turning face
-        const dir = quarterTurns < 0 ? -1 : 1;
         const sweep = (quarterTurns === 2 ? 1.38 : 1.08) * Math.PI * Math.max(0.25, intro);
         const startTheta = dir > 0 ? -Math.PI * 0.72 : -Math.PI * 0.28;
         const endTheta = startTheta + dir * sweep;
@@ -269,23 +372,11 @@
         ctx.strokeStyle = '#caff73';
         ctx.lineWidth = 4.5;
         ctx.stroke();
+        ctx.restore();
 
         // Center move badge on the turning face
         const [cx, cy] = facePoint(0, 0, 0.04);
-        const badgeRadius = 21 * (0.9 + 0.1 * intro);
-        ctx.beginPath();
-        ctx.arc(cx, cy, badgeRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(15, 22, 34, 0.94)';
-        ctx.fill();
-        ctx.lineWidth = 2.4;
-        ctx.strokeStyle = '#caff73';
-        ctx.stroke();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '800 16px Geist, "DM Sans", sans-serif';
-        ctx.fillStyle = '#caff73';
-        ctx.fillText(typeof move === 'string' ? move : move.notation, cx, cy + 1);
-        ctx.restore();
+        drawMoveBadge(cx, cy, moveLabel, completed ? 0.92 : 1);
       }
     }
 

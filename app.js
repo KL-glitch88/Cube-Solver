@@ -171,7 +171,7 @@
     const repair = alternatives[choice];
     const data = solution ? solution.states[step + Number(previewAfterTurn)] : repair?.next ?? stickers;
     const label = nextMove ? (previewAfterTurn ? 'After move ' : 'Before move ') + (step + 1) : 'Solved';
-    byId('preview-label').textContent = solution ? label : repair ? 'Suggested layout' : 'Live entry';
+    byId('preview-label').textContent = solution ? label : repair ? 'Suggested layout' : busy ? 'Checking…' : 'Live entry';
     replay.hidden = !nextMove || !ctx;
     replay.textContent = reducedMotion.matches ? (previewAfterTurn ? 'Show before turn' : 'Show after turn') : '↻ Replay turn';
     canvas.setAttribute('aria-label', ['U', 'F', 'R'].map(face => {
@@ -289,17 +289,49 @@
       'invalid-corner': 'These three colours cannot form a corner.',
       'mirrored-corner': 'These corner colours are in reverse order.',
       'duplicate-corner': 'This corner repeats a combination already entered.',
-      'twisted-corner': 'The total corner twist cannot be undone by legal turns.',
-      'invalid-wing': 'These two stickers cannot form a wing edge in this orientation.',
-      'duplicate-wing': 'This wing edge repeats an orientation and colour pair already entered.',
+      'twisted-corner': 'The corners have a combined twist that normal turns cannot undo.',
+      'invalid-wing': 'These two stickers cannot form an edge piece in this colour scheme.',
+      'duplicate-wing': 'This edge piece repeats an orientation and colour pair already entered.',
+      'flipped-edge': 'An edge piece cannot be flipped in isolation on this cube.',
+      'parity': 'Two pieces appear swapped in a way normal turns cannot undo.',
+      'duplicate-centre-colour': 'Each reference colour should appear once in the colour scheme.',
+      'unknown-colour': 'One or more stickers do not match the six cube colours.',
+    };
+    const errorLabels = {
+      'twisted-corner': 'Corner orientation',
+      'flipped-edge': 'Edge orientation',
+      'parity': 'Piece parity',
+      'duplicate-centre-colour': 'Colour scheme',
+      'unknown-colour': 'Sticker colour',
+    };
+    const cornerChipByLabel = {
+      'top right front': 'URF',
+      'top front left': 'UFL',
+      'top left back': 'ULB',
+      'top back right': 'UBR',
+      'bottom front right': 'DFR',
+      'bottom left front': 'DLF',
+      'bottom back left': 'DBL',
+      'bottom right back': 'DRB',
+    };
+    const largeChipTitle = label => {
+      const cornerMatch = label.match(/^Reorient the (.+) corner$/);
+      if (cornerMatch) return cornerChipByLabel[cornerMatch[1]] ?? label;
+      const entryMatch = label.match(/^([URFDLB]) face · rotate entry (\d+°) clockwise$/);
+      if (entryMatch) return names[entryMatch[1]] + ' (' + entryMatch[1] + ') · ' + entryMatch[2];
+      return label;
     };
     const location = index => names[faces[Math.floor(index / 16)]] + ' ' + positionLabel(index % 16);
     for (const error of report.errors) {
-      const colour = error.face && colours[scheme[faces.indexOf(error.face)]][0];
+      const colour = error.face && colours[scheme[faces.indexOf(error.face)]]?.[0];
+      const prefix = colour
+        || (error.facelets?.length ? error.facelets.map(location).join(' / ') : '')
+        || errorLabels[error.code]
+        || 'Layout check';
       const detail = error.code === 'colour-count' ? error.count + ' stickers entered, 16 expected.'
         : error.code === 'centre-count' ? error.count + ' centre stickers entered, 4 expected.'
         : descriptions[error.code] ?? 'Check the sticker colours.';
-      listItem(list, colour || (error.facelets ?? []).map(location).join(' / '), detail);
+      listItem(list, prefix + ' ·', detail);
     }
     results.append(list);
     const repair = alternatives[choice];
@@ -307,27 +339,40 @@
       results.append(node('p', 'Re-enter the listed positions. If no positions are listed, check the colour totals and centre squares on all six faces.'));
       return;
     }
-    results.append(node('p', 'Compare each suggestion with the physical cube. Several different edits can produce a solvable layout.', 'compare-tip'));
+    results.append(node('p', alternatives.length > 1
+      ? 'Several corrections would make this layout solvable. Compare each suggestion with your cube to find what actually changed.'
+      : 'Compare this possible correction with your cube before applying it.', 'compare-tip'));
     const options = node('div', '', 'candidate-list');
-    alternatives.forEach((candidate, index) => {
-      const option = button(candidate.label, '', () => {
-        choice = index;
-        draw();
-        results.querySelector('.candidate-list [aria-pressed=true]')?.focus({ preventScroll: true });
+    if (alternatives.length > 1) {
+      alternatives.forEach((candidate, index) => {
+        const option = button(largeChipTitle(candidate.label), '', () => {
+          choice = index;
+          draw();
+          results.querySelector('.candidate-list [aria-pressed=true]')?.focus({ preventScroll: true });
+        });
+        option.setAttribute('aria-label', candidate.label);
+        option.setAttribute('aria-pressed', String(index === choice));
+        options.append(option);
       });
-      option.setAttribute('aria-pressed', String(index === choice));
-      options.append(option);
-    });
+    }
+    const isEntryRepair = !repair.label.startsWith('Reorient');
     const card = node('div', '', 'repair-card');
+    card.append(node('h4', repair.label));
+    card.append(node('p', isEntryRepair
+      ? 'Check how you held that face when you entered its colours. This changes the grid on screen only.'
+      : 'If you know this piece was twisted, use your cube maker’s instructions to reseat it in the orientation below. Avoid forcing the piece. Other corners may also be valid candidates.'));
     const changes = node('ul', '', 'changes');
     for (const index of repair.changes) {
-      listItem(changes, location(index), colours[stickers[index]][0] + ' → ' + colours[repair.next[index]][0]);
+      listItem(changes, location(index) + ' ·', colours[stickers[index]][0] + ' → ' + colours[repair.next[index]][0]);
     }
-    card.append(node('h4', repair.label), changes, button('Correct the entry & solve', 'secondary', () => {
+    const actions = node('div', '', 'repair-actions');
+    actions.append(button(isEntryRepair ? 'Correct the entry & solve' : 'Use this layout & solve', 'secondary', () => {
       stickers = repair.next.slice();
       runCheck();
     }));
-    results.append(options, card);
+    card.append(changes, actions);
+    if (options.children.length) results.append(options);
+    results.append(card);
   }
 
 
@@ -497,9 +542,11 @@
   function drawResults() {
     if (solution) return renderSolution();
     if (busy || solveFailed) {
+      const failedCopy = location.protocol === 'file:'
+        ? 'The 4×4 solver runs in a web worker, which browsers block on file:// pages. Serve this folder over HTTP and reopen the page.'
+        : 'Your colours are still entered. Try Check & solve again.';
       results.replaceChildren(node('h3', busy ? 'Checking your 4×4…' : 'Could not calculate a solution'),
-        node('p', busy ? 'The first solve prepares the search tables on this device.'
-          : 'Your colours are still entered. Try Check & solve again.'));
+        node('p', busy ? 'The first solve prepares the search tables on this device.' : failedCopy));
       return;
     }
     if (report && !report.missing) return size === 4 ? renderLargeDiagnosis() : renderDiagnosis();
@@ -541,9 +588,12 @@
     const nextSize = Number(button.dataset.size);
     if (size === nextSize) return;
     drafts.set(size, { stickers, scheme, selected, activeFace });
+    const wasBusy = busy;
     resetResult();
-    worker?.terminate();
-    worker = undefined;
+    if (wasBusy) {
+      worker?.terminate();
+      worker = undefined;
+    }
     size = nextSize;
     const draft = drafts.get(size);
     stickers = draft?.stickers ?? Array(6 * perFace()).fill('');
