@@ -7,7 +7,7 @@
   const positionInView = ([x, y, z]) => [351 + 98 * x - 81 * z, 218 - 95 * y + 40 * x + 43 * z];
   const cameraDepth = ([x, y, z]) => 7695 * x + 7454 * y + 9310 * z;
   const facingCamera = normal => cameraDepth(normal) > 0;
-  const cubiesBySize = new Map([2, 4].map(size => {
+  const cubiesBySize = new Map([2, 3, 4].map(size => {
     const coords = Array.from({ length: size }, (_, index) => (2 * index + 1) / size - 1);
     return [size, coords.flatMap(x => coords.flatMap(y => coords.map(z => [x, y, z])))];
   }));
@@ -177,10 +177,10 @@
 
         // High-contrast double ring for flagged stickers (visible on yellow, orange, and white)
         if (flags.includes(index)) {
-          const outerWidth = size === 4 ? 4.2 : 6.5;
-          const innerWidth = size === 4 ? 2.2 : 3.5;
-          const dotRadius = size === 4 ? 4 : 6;
-          const dotStroke = size === 4 ? 1.6 : 2.2;
+          const outerWidth = size === 2 ? 6.5 : size === 3 ? 5.2 : 4.2;
+          const innerWidth = size === 2 ? 3.5 : size === 3 ? 2.7 : 2.2;
+          const dotRadius = size === 2 ? 6 : size === 3 ? 5 : 4;
+          const dotStroke = size === 2 ? 2.2 : size === 3 ? 1.8 : 1.6;
           drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#090d16', outerWidth);
           drawRoundedQuad(ctx, stickerQuad, 0.15, null, '#ff389c', innerWidth);
           const [cx, cy] = uv(0.5, 0.5);
