@@ -336,6 +336,8 @@
     const largeChipTitle = label => {
       const cornerMatch = label.match(/^Reorient the (.+) corner$/);
       if (cornerMatch) return cornerChipByLabel[cornerMatch[1]] ?? label;
+      const edgeMatch = label.match(/^Reorient the (.+) edge$/);
+      if (edgeMatch) return edgeMatch[1];
       const entryMatch = label.match(/^([URFDLB]) face · rotate entry (\d+°) clockwise$/);
       if (entryMatch) return names[entryMatch[1]] + ' (' + entryMatch[1] + ') · ' + entryMatch[2];
       return label;
@@ -343,10 +345,10 @@
     const location = index => names[faces[Math.floor(index / perFace())]] + ' ' + positionLabel(index % perFace());
     for (const error of report.errors) {
       const colour = colours[error.colour ?? scheme[faces.indexOf(error.face)]]?.[0];
-      const prefix = colour
-        || (error.facelets?.length ? error.facelets.map(location).join(' / ') : '')
-        || errorLabels[error.code]
-        || 'Layout check';
+      const locations = error.facelets?.length ? error.facelets.map(location).join(' / ') : '';
+      const prefix = error.code === 'duplicate-centre-colour' && colour && locations
+        ? colour + ' (' + locations + ')'
+        : colour || locations || errorLabels[error.code] || 'Layout check';
       const detail = error.code === 'colour-count' ? error.count + ' stickers entered, ' + error.expected + ' expected.'
         : error.code === 'centre-count' ? error.count + ' centre stickers entered, 4 expected.'
         : descriptions[error.code] ?? 'Check the sticker colours.';
@@ -355,7 +357,7 @@
     results.append(list);
     const repair = alternatives[choice];
     if (!repair) {
-      results.append(node('p', 'Re-enter the listed positions. If no positions are listed, check the colour totals and centre squares on all six faces.'));
+      results.append(node('p', 'Re-enter any listed positions, or recheck the colour totals, swapped pieces, and centre squares across all six faces.'));
       return;
     }
     results.append(node('p', alternatives.length > 1
@@ -375,11 +377,14 @@
       });
     }
     const isEntryRepair = repair.label.includes('rotate entry');
+    const isEdgeRepair = repair.label.endsWith(' edge');
     const card = node('div', '', 'repair-card');
     card.append(node('h4', repair.label));
     card.append(node('p', isEntryRepair
       ? 'Check how you held that face when you entered its colours. This changes the grid on screen only.'
-      : 'If you know this piece was twisted, use your cube maker’s instructions to reseat it in the orientation below. Avoid forcing the piece. Other corners may also be valid candidates.'));
+      : isEdgeRepair
+        ? 'If you know this edge piece was flipped, check its stickers or use your cube maker’s instructions to reseat it in the orientation below. Other edges may also be valid candidates.'
+        : 'If you know this piece was twisted, use your cube maker’s instructions to reseat it in the orientation below. Avoid forcing the piece. Other corners may also be valid candidates.'));
     const changes = node('ul', '', 'changes');
     for (const index of repair.changes) {
       listItem(changes, location(index) + ' ·', colours[stickers[index]][0] + ' → ' + colours[repair.next[index]][0]);
